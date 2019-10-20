@@ -202,7 +202,8 @@ assign ds_rs        =   inst_jr || inst_addi || inst_addiu || inst_lw ||ds_rs_rt
                         inst_andi || inst_ori || inst_xori ||
                         inst_mtlo || inst_mthi ||
                         inst_bgez || inst_bgtz || inst_blez || inst_bltz ||
-                        inst_bgezal || inst_bltzal;
+                        inst_bgezal || inst_bltzal ||
+                        inst_jalr;
 assign ds_rt        =   inst_sll || inst_srl || inst_sra  || ds_rs_rt;                        
 
 
@@ -287,7 +288,7 @@ assign inst_sllv   = op_d[6'h00] & func_d[6'h04] & sa_d[5'h00];
 assign inst_srlv   = op_d[6'h00] & func_d[6'h06] & sa_d[5'h00];
 assign inst_srav   = op_d[6'h00] & func_d[6'h07] & sa_d[5'h00];
 assign inst_jr     = op_d[6'h00] & func_d[6'h08] & rt_d[5'h00] & rd_d[5'h00] & sa_d[5'h00];
-assign inst_jalr     = op_d[6'h00] & func_d[6'h09] & rd_d[5'h00] & sa_d[5'h00];
+assign inst_jalr   = op_d[6'h00] & func_d[6'h09] & rt_d[5'h00] & sa_d[5'h00];
 assign inst_mfhi   = op_d[6'h00] & func_d[6'h10] & rt_d[5'h00] & rs_d[5'h00] & sa_d[5'h00];
 assign inst_mthi   = op_d[6'h00] & func_d[6'h11] & rt_d[5'h00] & rd_d[5'h00] & sa_d[5'h00];
 assign inst_mflo   = op_d[6'h00] & func_d[6'h12] & rt_d[5'h00] & rs_d[5'h00] & sa_d[5'h00];
@@ -310,7 +311,7 @@ assign inst_bltz   = op_d[6'h01] & rt_d[5'h00];
 assign inst_bgez   = op_d[6'h01] & rt_d[5'h01];
 assign inst_bltzal = op_d[6'h01] & rt_d[5'h10];
 assign inst_bgezal = op_d[6'h01] & rt_d[5'h11];
-assign inst_lui    = op_d[6'h0f] & rd_d[5'h00];
+assign inst_lui    = op_d[6'h0f] & rs_d[5'h00];
 assign inst_j      = op_d[6'h02];
 assign inst_jal    = op_d[6'h03];
 assign inst_beq    = op_d[6'h04];
@@ -384,8 +385,8 @@ assign rt_value = rt_upup[2] ? stuck_es_data :
                   rt_upup[0] ? stuck_ws_data : rf_rdata2;
 
 assign rs_eq_rt = (rs_value == rt_value);
-assign rs_gr_ze = (rs_value >  0);
-assign rs_sm_ze = (rs_value <  0);
+assign rs_gr_ze = ($signed(rs_value) >  0);
+assign rs_sm_ze = ($signed(rs_value) <  0);
 
 assign br_taken = (   inst_beq  &&  rs_eq_rt
                    || inst_bne  && !rs_eq_rt

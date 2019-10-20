@@ -152,23 +152,34 @@ always @(posedge clk) begin
     end
     
     if(es_mult) begin
-        {reg_hi, reg_lo} <= mult_result;
+        reg_hi <= mult_result[63:32];
     end
     else if(es_multu) begin
-        {reg_hi, reg_lo} <= multu_result;
+        reg_hi <= multu_result[63:32];
     end
     else if(es_div && div_out_valid) begin
-        {reg_lo, reg_hi} <= div_result;
+        reg_hi <= div_result[31:0];
     end
     else if(es_divu && divu_out_valid) begin
-        {reg_lo, reg_hi} <= divu_result;
+        reg_hi <= divu_result[31:0];
     end
-    
-    if(es_mthi) begin
+    else if(es_mthi) begin
         reg_hi <= es_rs_value;
     end
     
-    if(es_mtlo) begin
+    if(es_mult) begin
+        reg_lo <= mult_result[31:0];
+    end
+    else if(es_multu) begin
+        reg_lo <= multu_result[31:0];
+    end
+    else if(es_div && div_out_valid) begin
+        reg_lo <= div_result[63:32];
+    end
+    else if(es_divu && divu_out_valid) begin
+        reg_lo <= divu_result[63:32];
+    end
+    else if(es_mtlo) begin
         reg_lo <= es_rs_value;
     end
     
@@ -251,5 +262,5 @@ assign es_to_ms_result = es_mfhi ? reg_hi :
                          es_mflo ? reg_lo :
                          es_alu_result;
 
-assign stuck_es_to_ds_bus = (!es_valid || !es_gr_we) ? 38'b0 : {es_load_op, es_dest, es_alu_result};
+assign stuck_es_to_ds_bus = (!es_valid || !es_gr_we) ? 38'b0 : {es_load_op, es_dest, es_to_ms_result};
 endmodule
