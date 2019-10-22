@@ -28,8 +28,14 @@ wire        ms_gr_we;
 wire [ 4:0] ms_dest;
 wire [31:0] ms_alu_result;
 wire [31:0] ms_pc;
+wire [2 :0] ms_load_inst;
+wire [1 :0] ms_load_addr;
+wire [31:0] ms_load_adjs;
 
-assign {ms_res_from_mem,  //70:70
+assign {ms_load_adjs   , 
+        ms_load_addr   ,  //75:74
+        ms_load_inst   ,  //73:71
+        ms_res_from_mem,  //70:70
         ms_gr_we       ,  //69:69
         ms_dest        ,  //68:64
         ms_alu_result  ,  //63:32
@@ -38,6 +44,22 @@ assign {ms_res_from_mem,  //70:70
 
 wire [31:0] mem_result;
 wire [31:0] ms_final_result;
+
+wire        ms_lw;
+wire        ms_lb;
+wire        ms_lh;
+wire        ms_lbu;
+wire        ms_lhu;
+wire        ms_lwl;
+wire        ms_lwr;
+
+assign ms_lw = ms_res_from_mem & (ms_load_inst == 3'b000);
+assign ms_lb = ms_res_from_mem & (ms_load_inst == 3'b001);
+assign ms_lh = ms_res_from_mem & (ms_load_inst == 3'b010);
+assign ms_lbu= ms_res_from_mem & (ms_load_inst == 3'b011);
+assign ms_lhu= ms_res_from_mem & (ms_load_inst == 3'b100);
+assign ms_lwl= ms_res_from_mem & (ms_load_inst == 3'b101);
+assign ms_lwr= ms_res_from_mem & (ms_load_inst == 3'b110);
 
 assign ms_to_ws_bus = {ms_gr_we       ,  //69:69
                        ms_dest        ,  //68:64
@@ -61,7 +83,28 @@ always @(posedge clk) begin
     end
 end
 
-assign mem_result = data_sram_rdata;
+assign mem_result = ms_lw ? data_sram_rdata :
+                    ms_lb && (ms_load_addr == 2'b00) ? {{25{data_sram_rdata[7 ]}}, data_sram_rdata[6 :0 ]} :
+                    ms_lb && (ms_load_addr == 2'b01) ? {{25{data_sram_rdata[15]}}, data_sram_rdata[14:8 ]} :
+                    ms_lb && (ms_load_addr == 2'b10) ? {{25{data_sram_rdata[23]}}, data_sram_rdata[22:16]} :
+                    ms_lb && (ms_load_addr == 2'b11) ? {{25{data_sram_rdata[31]}}, data_sram_rdata[30:24]} :
+                    ms_lh && (ms_load_addr == 2'b00) ? {{17{data_sram_rdata[15]}}, data_sram_rdata[14:0 ]} :
+                    ms_lh && (ms_load_addr == 2'b10) ? {{17{data_sram_rdata[31]}}, data_sram_rdata[30:16]} :
+                    ms_lbu&& (ms_load_addr == 2'b00) ? {24'b0                    , data_sram_rdata[7 :0 ]} :
+                    ms_lbu&& (ms_load_addr == 2'b01) ? {24'b0                    , data_sram_rdata[15:8 ]} :
+                    ms_lbu&& (ms_load_addr == 2'b10) ? {24'b0                    , data_sram_rdata[23:16]} :
+                    ms_lbu&& (ms_load_addr == 2'b11) ? {24'b0                    , data_sram_rdata[31:24]} :
+                    ms_lhu&& (ms_load_addr == 2'b00) ? {16'b0                    , data_sram_rdata[15:0 ]} :
+                    ms_lhu&& (ms_load_addr == 2'b10) ? {16'b0                    , data_sram_rdata[31:16]} :
+                    ms_lwl&& (ms_load_addr == 2'b00) ? {data_sram_rdata[7 :0 ], ms_load_adjs[23:0 ]} :
+                    ms_lwl&& (ms_load_addr == 2'b01) ? {data_sram_rdata[15:0 ], ms_load_adjs[15:0 ]} :
+                    ms_lwl&& (ms_load_addr == 2'b10) ? {data_sram_rdata[23:0 ], ms_load_adjs[7 :0 ]} :
+                    ms_lwl&& (ms_load_addr == 2'b11) ? {data_sram_rdata[31:0 ]} :
+                    ms_lwr&& (ms_load_addr == 2'b00) ? {data_sram_rdata[31:0 ]} :
+                    ms_lwr&& (ms_load_addr == 2'b01) ? {ms_load_adjs[31:24], data_sram_rdata[31:8 ]} :
+                    ms_lwr&& (ms_load_addr == 2'b10) ? {ms_load_adjs[31:16], data_sram_rdata[31:16]} :
+                    ms_lwr&& (ms_load_addr == 2'b11) ? {ms_load_adjs[31:8 ], data_sram_rdata[31:24]} :
+                    data_sram_rdata;
 
 assign ms_final_result = ms_res_from_mem ? mem_result
                                          : ms_alu_result;

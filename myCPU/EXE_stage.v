@@ -51,7 +51,11 @@ wire        es_ready_go   ;
 
 reg  [`DS_TO_ES_BUS_WD -1:0] ds_to_es_bus_r;
 wire [11:0] es_alu_op     ;
+wire [2 :0] es_writ_inst  ;
+wire [31:0] es_load_adjs  ;
+wire [1 :0] es_load_addr  ;
 wire        es_load_op    ;
+wire [2 :0] es_load_inst  ;
 wire        es_src1_is_sa ;  
 wire        es_src1_is_pc ;
 wire        es_src2_is_imm;
@@ -73,8 +77,16 @@ wire        es_mfhi       ;
 wire        es_mflo       ;
 wire        es_mthi       ;
 wire        es_mtlo       ;
+wire        es_sw;
+wire        es_sb;
+wire        es_sh;
+wire        es_swl;
+wire        es_swr;
 
-assign {es_mfhi        ,  //144
+assign {es_writ_inst   ,
+        es_load_adjs   , 
+        es_load_inst   ,  //147:145
+        es_mfhi        ,  //144
         es_mflo        ,  //143
         es_mthi        ,  //142
         es_mtlo        ,  //141
@@ -103,6 +115,8 @@ wire [31:0] es_alu_src2   ;
 wire [31:0] es_alu_result ;
 
 wire        es_res_from_mem;
+wire [1 :0] es_to_ms_load_addr;
+wire [2 :0] es_to_ms_load_inst;
 wire [31:0] es_to_ms_result;
 
 wire [63:0] mult_result;
@@ -112,6 +126,12 @@ wire [63:0] divu_result;
 
 reg         div_not_in;
 reg         divu_not_in;
+
+assign es_sw = (es_writ_inst == 3'b001);
+assign es_sb = (es_writ_inst == 3'b010);
+assign es_sh = (es_writ_inst == 3'b011);
+assign es_swl= (es_writ_inst == 3'b100);
+assign es_swr= (es_writ_inst == 3'b101);
 
 assign multu_result = es_rs_value * es_rt_value;
 assign mult_result = $signed(es_rs_value) * $signed(es_rt_value);
@@ -128,8 +148,13 @@ assign div_dividend_valid= div_valid;
 assign divu_divisor_valid = divu_valid;
 assign divu_dividend_valid= divu_valid;
 
+assign es_to_ms_load_inst = es_load_inst;
+assign es_to_ms_load_addr = es_alu_result[1:0];
 assign es_res_from_mem = es_load_op;
-assign es_to_ms_bus = {es_res_from_mem,  //70:70
+assign es_to_ms_bus = {es_load_adjs,
+                       es_to_ms_load_addr,
+                       es_to_ms_load_inst,//73:71
+                       es_res_from_mem,  //70:70
                        es_gr_we       ,  //69:69
                        es_dest        ,  //68:64
                        es_to_ms_result  ,  //63:32
@@ -254,9 +279,34 @@ divu_mod my_divu(
     
 
 assign data_sram_en    = 1'b1;
-assign data_sram_wen   = es_mem_we&&es_valid ? 4'hf : 4'h0;
-assign data_sram_addr  = es_alu_result;
-assign data_sram_wdata = es_rt_value;
+assign data_sram_wen   = es_sw && es_valid ? 4'hf : 
+                         es_sb && es_valid && es_alu_result[1:0] == 2'b00 ? 4'b0001 : 
+                         es_sb && es_valid && es_alu_result[1:0] == 2'b01 ? 4'b0010 :
+                         es_sb && es_valid && es_alu_result[1:0] == 2'b10 ? 4'b0100 :
+                         es_sb && es_valid && es_alu_result[1:0] == 2'b11 ? 4'b1000 :
+                         es_sh && es_valid && es_alu_result[1] ==   1'b0  ? 4'b0011 :
+                         es_sh && es_valid && es_alu_result[1] ==   1'b1  ? 4'b1100 :
+                         es_swl&& es_valid && es_alu_result[1:0] == 2'b00 ? 4'b0001 :
+                         es_swl&& es_valid && es_alu_result[1:0] == 2'b01 ? 4'b0011 :
+                         es_swl&& es_valid && es_alu_result[1:0] == 2'b10 ? 4'b0111 :
+                         es_swl&& es_valid && es_alu_result[1:0] == 2'b11 ? 4'b1111 :
+                         es_swr&& es_valid && es_alu_result[1:0] == 2'b00 ? 4'b1111 :
+                         es_swr&& es_valid && es_alu_result[1:0] == 2'b01 ? 4'b1110 :
+                         es_swr&& es_valid && es_alu_result[1:0] == 2'b10 ? 4'b1100 :
+                         es_swr&& es_valid && es_alu_result[1:0] == 2'b11 ? 4'b1000 :
+                         4'h0;
+assign data_sram_addr  = {es_alu_result[31:2], 2'b0};
+assign data_sram_wdata = es_sb ? {4{es_rt_value[7 :0]}} :
+                         es_sh ? {2{es_rt_value[15:0]}} :
+                         es_swl && es_alu_result[1:0] == 2'b00 ? {24'b0, es_rt_value[31:24]} :
+                         es_swl && es_alu_result[1:0] == 2'b01 ? {16'b0, es_rt_value[31:16]} :
+                         es_swl && es_alu_result[1:0] == 2'b10 ? {8'b0 , es_rt_value[31:8]} :
+                         es_swl && es_alu_result[1:0] == 2'b11 ? {es_rt_value[31:0]} :
+                         es_swr && es_alu_result[1:0] == 2'b00 ? {es_rt_value[31:0]} :
+                         es_swr && es_alu_result[1:0] == 2'b01 ? {es_rt_value[23:0], 8'b0} :
+                         es_swr && es_alu_result[1:0] == 2'b10 ? {es_rt_value[15:0], 16'b0} :
+                         es_swr && es_alu_result[1:0] == 2'b11 ? {es_rt_value[7 :0], 24'b0} :
+                         es_rt_value;
 
 assign es_to_ms_result = es_mfhi ? reg_hi :
                          es_mflo ? reg_lo :
